@@ -19,8 +19,11 @@ const int MAX_PORT = 65536;
 const int GET_ADDR_NO_ERROR = 0;
 const int CONNECT_ERROR = -1;
 
+FILE* LOG;
+
 int main(int argc, char const *argv[])
 {
+    LOG = fdopen(3, "w");
     if (argc < 3){
         fprintf(stderr, "%s\n%s\n",
                "Hostname and port must be specified in command args,  example",
@@ -66,16 +69,16 @@ int main(int argc, char const *argv[])
 
     for (struct addrinfo *rp = servinfo; rp != NULL; rp = rp->ai_next) {
         // create file descriptor
-        fprintf(stderr, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
+        dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
         int s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (s == -1){
-            fprintf(stderr, "%s\n","failed to get socket file descriptor");
+            dprintf(3, "%s\n","failed to get socket file descriptor");
             continue;
         }
 
         // connect socket to server
         if (connect(s, rp->ai_addr, rp->ai_addrlen) != CONNECT_ERROR){
-            fprintf(stderr, "socket connected to server");
+            dprintf(3, "%s\n", "socket connected to server");
             break;
         }
         close(s);
