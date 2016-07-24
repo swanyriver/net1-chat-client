@@ -19,7 +19,9 @@ const int PRIVILEGED = 1024;
 const int MAX_PORT = 65536;
 const int GET_ADDR_NO_ERROR = 0;
 const int CONNECT_ERROR = -1;
+const int EXPECTED_ARGS = 2;
 const char* QUIT = "\\quit";
+const int QUIT_REQUESTED = -1;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
@@ -66,65 +68,105 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     return s;
 }
 
+int getChatInput(char* buffer, const int max_read, const char* handle){
+    printf("%s",handle);
+    fgets(buffer, max_read, stdin);
+    return strncmp(buffer, QUIT, MIN(strlen(buffer), strlen(QUIT)));
+}
+
+int sendBytes(int sock, char* outgoingBuffer){
+    size_t len = strlen(outgoingBuffer) + 1;
+    /* +1 for terminating null byte */
+
+    if (write(sock, outgoingBuffer, len) != len) {
+        dprintf(3, "partial/failed write\n");
+        return 0;
+    }
+
+    return 1;
+}
+
 void chat(int sock, const char* handle){
     dprintf(3, "%s\n", "beginning chat program");
-    //todo remvoe temp
-    char** msgarray = malloc(sizeof(char*) * 4);
-    msgarray[0] = "hello";
-    msgarray[1] = "i am client";
-    msgarray[2] = "goodbye";
-    msgarray[3] = "\\quit";
-    char* msg = *msgarray;
 
-    char* readBuffer = malloc(REC_BUFFER_SIZE + 1);
 
-    while (strncmp(msg, QUIT, MIN(strlen(msg), strlen(QUIT)))) {
-        size_t len = strlen(msg) + 1;
-        /* +1 for terminating null byte */
+    //allocate char* buffer,  readBuffer is not seperate space, it is just a pointer within outgoing buffer
+    char* outgoingBuffer = malloc(REC_BUFFER_SIZE + 1);
+    char* readBuffer = outgoingBuffer + strlen(handle);
+    strncpy(outgoingBuffer, handle, HANDLE_LIMIT);
 
-        if (len + 1 > MSG_LIMIT) {
-            //todo truncate message and inform user
-            // or transmit in parts
+    char* recieveBuffer = malloc(REC_BUFFER_SIZE + 1);
 
+
+    while (getChatInput(readBuffer, MSG_LIMIT, handle)) {
+
+        sendBytes(sock, outgoingBuffer);
+
+        // todo the server is not waiting for multiple results what will this do???
+        // continue to send messages until stdin is consumed
+        while(!feof(stdin)){
+            fgets(readBuffer, MSG_LIMIT, stdin);
+            sendBytes(sock, outgoingBuffer);
         }
 
-        //todo move out of if
-        if (write(sock, msg, len) != len) {
-            //todo better error
-            fprintf(stderr, "partial/failed write\n");
-            //exit(EXIT_FAILURE);
-        }
-
-        size_t nread = (size_t) read(sock, readBuffer, REC_BUFFER_SIZE);
+        //recieve message from server and display it
+        size_t nread = (size_t) read(sock, recieveBuffer, REC_BUFFER_SIZE);
         if (nread == -1) {
             perror("read");
             //exit(EXIT_FAILURE);
         }
 
-        printf("Received %ld bytes: %s\n", (long) nread, readBuffer);
+        printf("%s\n",recieveBuffer);
 
+        dprintf(3,"Received %ld bytes\n", (long) nread);
 
-        //todo remove temp msg
-        msgarray +=1;
-        msg = *msgarray;
     }
+
+    dprintf(3,"%s\n"," chat loop exited");
+    free(outgoingBuffer);
+    free((void *) handle);
+    free(recieveBuffer);
 }
 
 char* getHandle(){
-    fseek(stdin,0,SEEK_END);
-    char* handle = malloc(sizeof(char*) * (HANDLE_LIMIT + 1));
-    fgets(handle, HANDLE_LIMIT, stdin);
-    for (char* c= handle; c-handle < HANDLE_LIMIT + 1; ++c){
-        putc(*c,stdout); putc('\n', stdout);
+    char* handle = malloc(sizeof(char*) * (HANDLE_LIMIT + 2));
+    int bufferSize = HANDLE_LIMIT * 3;
+    char* inputBuffer = malloc(sizeof(char*) * HANDLE_LIMIT * 3);
+    *handle = 0;
+
+    while (!strlen(handle)){
+        //read into inputBuffer
+        printf("%s","What would you like your chat handle to be>");
+        fgets(inputBuffer, bufferSize, stdin);
+        //todo copy nonWhitespace chars to handle
+
+        char* readCursor = inputBuffer;
+        char* writeCursor = handle;
+        while(*readCursor && readCursor - handle < HANDLE_LIMIT){
+            if (*readCursor != ' ' && *readCursor != '\n'){
+                *writeCursor++ = *readCursor;
+            }
+            readCursor++;
+        }
+        *writeCursor = 0;
     }
-    //consume extra chars from input buffer
-    while((getchar())!='\n');
-    return "CLIENT>";
+
+    // place ">" prompt chevron at end of handle
+    char* write = handle;
+    while (*write){
+        ++write;
+    }
+    *write++='>';
+    write = 0;
+
+    free(inputBuffer);
+    return handle;
 }
+
 
 int main(int argc, char const *argv[])
 {
-    if (argc < 3){
+    if (argc < EXPECTED_ARGS + 1){
         fprintf(stderr, "%s\n%s\n",
                "Hostname and port must be specified in command args,  example",
                "./chatclient flip2.engr.oregonstate.edu 9999"
@@ -154,11 +196,9 @@ int main(int argc, char const *argv[])
     ///// INVARIANT
     ///// client script has connected to server using socket sock
 
-    //chat(sock, getHandle());
-    getHandle();
-    getHandle();
+    chat(sock, getHandle());
 
-    // client has exited with \quit command, close socket
+    // client has exited with \quit command or server has disconected, close socket
     close(sock);
 
     dprintf(3,"%s\n", "Disconnected from server");
