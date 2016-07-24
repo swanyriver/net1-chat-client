@@ -1,27 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <errno.h>
 #include <string.h>
 #include <netdb.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
+#include <sys/stat.h>
 
-#include <arpa/inet.h>
 
 
 const int REC_BUFFER_SIZE = 512;
 const int MSG_LIMIT = 500;
 const int HANDLE_LIMIT = 10;
-const int MIN_PORT = 0;
 const int PRIVILEGED = 1024;
 const int MAX_PORT = 65536;
 const int GET_ADDR_NO_ERROR = 0;
 const int CONNECT_ERROR = -1;
 const int EXPECTED_ARGS = 2;
 const char* QUIT = "\\quit";
-const int QUIT_REQUESTED = -1;
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
 
@@ -38,7 +32,7 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
 
     int getadderResult = getaddrinfo(remoteHostName, remotePortSt, &hints, &servinfo);
     if (getadderResult != GET_ADDR_NO_ERROR){
-        printf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
+        fprintf(stderr, "getaddrinfo call failed with error: %s\n", gai_strerror(getadderResult));
         return 0;
     }
 
@@ -48,22 +42,30 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
     int s = 0;
     for (struct addrinfo *rp = servinfo; rp != NULL; rp = rp->ai_next) {
         // create file descriptor
-        dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
+        // dprintf(3, "attempting to connect to server on using addrinfo struct at:%p\n", rp);
         s = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
         if (s == -1){
-            dprintf(3, "%s\n","failed to get socket file descriptor");
+            // dprintf(3, "%s\n","failed to get socket file descriptor");
             continue;
         }
 
         // connect socket to server
         if (connect(s, rp->ai_addr, rp->ai_addrlen) != CONNECT_ERROR){
-            dprintf(3, "%s\n", "socket connected to server");
+            // dprintf(3, "%s\n", "socket connected to server");
             break;
         }
         close(s);
     }
     // free up memory used by addr-struct-linked-list
     freeaddrinfo(servinfo);
+
+
+    // ensure that fd is a valid socket, and not a closed socket ln:57
+    struct stat statbuf;
+    fstat(s, &statbuf);
+    if (!S_ISSOCK(statbuf.st_mode)){
+        s = 0;
+    }
 
     return s;
 }
@@ -76,13 +78,13 @@ int getChatInput(char* buffer, const int max_read, const char* handle){
 
 int sendBytes(int sock, char* outgoingBuffer){
 
-    dprintf(3, "sending to server:{%s}\n",outgoingBuffer);
+    // dprintf(3, "sending to server:{%s}\n",outgoingBuffer);
 
     size_t len = strlen(outgoingBuffer) + 1;
     /* +1 for terminating null byte */
 
     if (write(sock, outgoingBuffer, len) != len) {
-        dprintf(3, "partial/failed write\n");
+        // dprintf(3, "partial/failed write\n");
         return 0;
     }
 
@@ -90,7 +92,7 @@ int sendBytes(int sock, char* outgoingBuffer){
 }
 
 void chat(int sock, const char* handle){
-    dprintf(3, "%s\n", "beginning chat program");
+    // dprintf(3, "%s\n", "beginning chat program");
 
 
     //allocate char* buffer,  readBuffer is not seperate space, it is just a pointer within outgoing buffer
@@ -122,11 +124,11 @@ void chat(int sock, const char* handle){
 
         printf("%s\n",recieveBuffer);
 
-        dprintf(3,"Received %ld bytes\n", (long) nread);
+        // dprintf(3,"Received %ld bytes\n", (long) nread);
 
     }
 
-    dprintf(3,"%s\n"," chat loop exited");
+    // dprintf(3,"%s\n"," chat loop exited");
     free(outgoingBuffer);
     free((void *) handle);
     free(recieveBuffer);
@@ -192,6 +194,7 @@ int main(int argc, char const *argv[])
     ///// client launched with host string and valid port number
 
     int sock = getConnectedSocket(remoteHostName, remotePortSt);
+    printf("sock = %d\n", sock);
     if (!sock){
         fprintf(stderr, "%s\n", "(CRITICAL ERROR) failed to connect to server");
         return 1;
@@ -207,7 +210,7 @@ int main(int argc, char const *argv[])
     close(sock);
     free(handle);
 
-    dprintf(3,"%s\n", "Disconnected from server");
+    printf("\n%s\n\n", "Disconnected from server");
 
     return 0;
 }
