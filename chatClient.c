@@ -13,6 +13,7 @@
 
 const int REC_BUFFER_SIZE = 512;
 const int MSG_LIMIT = 500;
+const int HANDLE_LIMIT = 10;
 const int MIN_PORT = 0;
 const int PRIVILEGED = 1024;
 const int MAX_PORT = 65536;
@@ -66,6 +67,7 @@ int getConnectedSocket(const char* remoteHostName, const char* remotePortSt){
 }
 
 void chat(int sock, const char* handle){
+    dprintf(3, "%s\n", "beginning chat program");
     //todo remvoe temp
     char** msgarray = malloc(sizeof(char*) * 4);
     msgarray[0] = "hello";
@@ -109,6 +111,14 @@ void chat(int sock, const char* handle){
 }
 
 char* getHandle(){
+    fseek(stdin,0,SEEK_END);
+    char* handle = malloc(sizeof(char*) * (HANDLE_LIMIT + 1));
+    fgets(handle, HANDLE_LIMIT, stdin);
+    for (char* c= handle; c-handle < HANDLE_LIMIT + 1; ++c){
+        putc(*c,stdout); putc('\n', stdout);
+    }
+    //consume extra chars from input buffer
+    while((getchar())!='\n');
     return "CLIENT>";
 }
 
@@ -144,12 +154,14 @@ int main(int argc, char const *argv[])
     ///// INVARIANT
     ///// client script has connected to server using socket sock
 
-    chat(sock, getHandle());
+    //chat(sock, getHandle());
+    getHandle();
+    getHandle();
 
     // client has exited with \quit command, close socket
     close(sock);
 
-    printf("%s\n", "Disconnected from server");
+    dprintf(3,"%s\n", "Disconnected from server");
 
     return 0;
 }
