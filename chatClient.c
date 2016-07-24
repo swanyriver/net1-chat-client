@@ -105,7 +105,8 @@ void chat(int sock, const char* handle){
 
         sendBytes(sock, outgoingBuffer);
 
-        // todo the server is not waiting for multiple results what will this do???
+        // NOTE: the server will have to send a message between each 500ch peice, and client will see msg//500
+        // messages from server before getting to input a message again
         // continue to send messages until stdin is consumed
         while(feof(stdin)){
             fgets(readBuffer, MSG_LIMIT, stdin);
