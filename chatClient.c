@@ -75,6 +75,9 @@ int getChatInput(char* buffer, const int max_read, const char* handle){
 }
 
 int sendBytes(int sock, char* outgoingBuffer){
+
+    dprintf(3, "sending to server:{%s}\n",outgoingBuffer);
+
     size_t len = strlen(outgoingBuffer) + 1;
     /* +1 for terminating null byte */
 
@@ -104,7 +107,7 @@ void chat(int sock, const char* handle){
 
         // todo the server is not waiting for multiple results what will this do???
         // continue to send messages until stdin is consumed
-        while(!feof(stdin)){
+        while(feof(stdin)){
             fgets(readBuffer, MSG_LIMIT, stdin);
             sendBytes(sock, outgoingBuffer);
         }
@@ -142,7 +145,7 @@ char* getHandle(){
 
         char* readCursor = inputBuffer;
         char* writeCursor = handle;
-        while(*readCursor && readCursor - handle < HANDLE_LIMIT){
+        while(*readCursor && readCursor - inputBuffer < HANDLE_LIMIT){
             if (*readCursor != ' ' && *readCursor != '\n'){
                 *writeCursor++ = *readCursor;
             }
@@ -157,7 +160,7 @@ char* getHandle(){
         ++write;
     }
     *write++='>';
-    write = 0;
+    *write = 0;
 
     free(inputBuffer);
     return handle;
@@ -196,10 +199,12 @@ int main(int argc, char const *argv[])
     ///// INVARIANT
     ///// client script has connected to server using socket sock
 
-    chat(sock, getHandle());
+    char* handle = getHandle();
+    chat(sock, handle);
 
-    // client has exited with \quit command or server has disconected, close socket
+    // client has exited with \quit command or server has disconnected, close socket
     close(sock);
+    free(handle);
 
     dprintf(3,"%s\n", "Disconnected from server");
 
